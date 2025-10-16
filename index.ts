@@ -8,10 +8,10 @@ const MAX_CONCURRENT = 20;
 /** The starting page for crawling */
 const SEED = "https://www.naves-topical-bible.com";
 
-// (await parseTopicPage(
-//   "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
-// ),
-await crawl();
+await parseTopicPage(
+  "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
+);
+// await crawl();
 
 async function crawl() {
   console.time("scrape");
@@ -68,6 +68,7 @@ function parseReferences(refs: string[]): string[] {
   const results: string[] = [];
   let currentBook = "";
 
+  // FIXME: verse markings are also vertagged, even when they're included in the previous passage
   const pattern = /^(?:(?<book>[1-3]?\s?[A-Za-z]+)\s*)?(?<rest>[\d:,\-–]+)$/;
 
   for (const ref of refs) {
@@ -83,11 +84,20 @@ function parseReferences(refs: string[]): string[] {
   return results;
 }
 
-function parseSubtopic(header: HTMLElement): Subtopic | null {
-  const title = header.textContent.trim();
+function parseRelatedTopic(s: string): string | undefined {
+  const pattern = /^See\s+(?<relatedTopic>.+)$/;
+  const m = s.match(pattern);
+  if (!m || !m?.groups) return undefined;
+
+  const { relatedTopic } = m.groups;
+  return titleCase(relatedTopic ?? ""); // FIXME: weird type bug
+}
+
+function parseSubtopic(header: HTMLElement): Subtopic {
+  const title = titleCase(header.textContent.trim());
   const ul = header.nextElementSibling;
-  let p = header.nextElementSibling;
-  let verses: string[] = [];
+  let p = ul;
+  const verses: string[] = [];
   const relatedTopics: string[] = [];
 
   if (ul?.tagName === "UL") {
@@ -98,19 +108,22 @@ function parseSubtopic(header: HTMLElement): Subtopic | null {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    verses = parseReferences(refs);
+    verses.push(...parseReferences(refs));
     p = ul?.nextElementSibling;
   }
 
-  while (p?.tagName === "P" && p.textContent === "See") {
-    const relatedTopic = p?.querySelector("a")?.getAttribute("href") ?? "";
-    relatedTopics.push(relatedTopic);
+  while (p?.tagName === "P" && p.textContent.startsWith("See")) {
+    const relatedTopic = parseRelatedTopic(p?.textContent);
+    relatedTopic && relatedTopics.push(relatedTopic);
     p = p.nextElementSibling;
   }
 
-  if (title === "UNCLASSIFIED SCRIPTURES RELATING TO") {
-    console.log(ul?.children.toString());
-    console.log(title, verses, relatedTopics);
+  if (title === titleCase("UNCLASSIFIED SCRIPTURES RELATING TO")) {
+    console.log({
+      title,
+      verses,
+      relatedTopics,
+    });
   }
 
   return {
@@ -137,11 +150,17 @@ async function parseTopicPage(url: string): Promise<Topic> {
 
   const subtopics: Subtopic[] = document
     .querySelectorAll("h2, h3")
+    // FIXME: what if h2 represents section of subtopics
     .map(parseSubtopic)
     .filter((s) => !!s);
 
   console.timeEnd(url);
 
+  console.log({
+    title,
+    subtopics,
+    relatedTopics: topic?.relatedTopics ?? [],
+  });
   return {
     title,
     subtopics,

@@ -8,18 +8,25 @@ const MAX_CONCURRENT = 20;
 /** The starting page for crawling */
 const SEED = "https://www.naves-topical-bible.com";
 
-console.time("scrape");
-const queue = await getTopicURLs(SEED);
-const visited = new Set<string>();
-const workers = Array.from({ length: MAX_CONCURRENT }, () =>
-  worker(queue, visited),
-);
-const res = await Promise.all(workers);
-const topics = res.flat();
-console.timeEnd("scrape");
-console.log(inspect(topics, true, 4, true));
+// (await parseTopicPage(
+//   "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
+// ),
+await crawl();
 
-await writeFile("./data.json", JSON.stringify(topics, null, 2), "utf-8");
+async function crawl() {
+  console.time("scrape");
+  const queue = await getTopicURLs(SEED);
+  const visited = new Set<string>();
+  const workers = Array.from({ length: MAX_CONCURRENT }, () =>
+    worker(queue, visited),
+  );
+  const res = await Promise.all(workers);
+  const topics = res.flat();
+  console.timeEnd("scrape");
+  console.log(inspect(topics, true, 4, true));
+
+  await writeFile("./data.json", JSON.stringify(topics, null, 2), "utf-8");
+}
 
 async function getTopicURLs(seed: string): Promise<string[]> {
   const alphabet = "abcdefghijklmnopqrstuvwxyz".toUpperCase().split("");
@@ -29,7 +36,7 @@ async function getTopicURLs(seed: string): Promise<string[]> {
     return parse(await res.text())
       .querySelectorAll("div#content > li > a")
       .map((el) => el.getAttribute("href"))
-      .filter((href) => !!href)
+      .filter(Boolean)
       .map((href) => `${seed}/${href}`);
   });
 
@@ -40,13 +47,13 @@ async function getTopicURLs(seed: string): Promise<string[]> {
 type Subtopic = {
   title: string;
   verses: string[];
-  relatedTopic?: string;
+  relatedTopics: string[];
 };
 
 type Topic = {
   title: string;
   subtopics: Subtopic[];
-  relatedTopic?: string;
+  relatedTopics: string[];
 };
 
 function titleCase(s: string): string {
@@ -57,9 +64,23 @@ function titleCase(s: string): string {
     .join(" ");
 }
 
-function parseVerseFromURL(url: string): string {
-  const r = /https:\/\/.*\?p=(.*)/; // verseLink url
-  return url.match(r)?.[0] ?? "";
+function parseReferences(refs: string[]): string[] {
+  const results: string[] = [];
+  let currentBook = "";
+
+  const pattern = /^(?:(?<book>[1-3]?\s?[A-Za-z]+)\s*)?(?<rest>[\d:,\-–]+)$/;
+
+  for (const ref of refs) {
+    const m = ref.match(pattern);
+    if (!m || !m.groups) continue;
+
+    const { book, rest } = m.groups;
+    if (book) currentBook = book;
+
+    results.push(`${currentBook} ${rest}`);
+  }
+
+  return results;
 }
 
 function parseSubtopic(header: HTMLElement): Subtopic | null {
@@ -67,27 +88,35 @@ function parseSubtopic(header: HTMLElement): Subtopic | null {
   const ul = header.nextElementSibling;
   let p = header.nextElementSibling;
   let verses: string[] = [];
-  // TODO: there can be multiple related topics per (sub)topic...
-  let relatedTopic;
+  const relatedTopics: string[] = [];
 
   if (ul?.tagName === "UL") {
-    verses = ul
-      .querySelectorAll("li > a.verseLink")
-      .map((a) => a.getAttribute("href") ?? "")
-      .map(parseVerseFromURL)
-      .filter((a) => a !== "");
+    const refs = ul
+      .querySelectorAll("li > span.versetag")
+      .map((el) => el.textContent)
+      .flatMap((s) => s.split("; "))
+      .map((s) => s.trim())
+      .filter(Boolean);
 
+    verses = parseReferences(refs);
     p = ul?.nextElementSibling;
   }
 
-  if (p?.tagName === "P" && p.textContent === "See") {
-    relatedTopic = p?.querySelector("a")?.getAttribute("href") ?? "";
+  while (p?.tagName === "P" && p.textContent === "See") {
+    const relatedTopic = p?.querySelector("a")?.getAttribute("href") ?? "";
+    relatedTopics.push(relatedTopic);
+    p = p.nextElementSibling;
+  }
+
+  if (title === "UNCLASSIFIED SCRIPTURES RELATING TO") {
+    console.log(ul?.children.toString());
+    console.log(title, verses, relatedTopics);
   }
 
   return {
     title,
     verses,
-    relatedTopic,
+    relatedTopics,
   };
 }
 
@@ -112,17 +141,11 @@ async function parseTopicPage(url: string): Promise<Topic> {
     .filter((s) => !!s);
 
   console.timeEnd(url);
-  // console.log("Finished parsing", {
-  //   url,
-  //   title,
-  //   numSubtopics: subtopics.length,
-  //   relatedTopic: topic?.relatedTopic
-  // });
 
   return {
     title,
     subtopics,
-    relatedTopic: topic?.relatedTopic,
+    relatedTopics: topic?.relatedTopics ?? [],
   };
 }
 

@@ -8,9 +8,6 @@ const MAX_CONCURRENT = 20;
 /** The starting page for crawling */
 const SEED = "https://www.naves-topical-bible.com";
 
-// await parseTopicPage(
-//   "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
-// );
 await crawl();
 
 async function crawl() {

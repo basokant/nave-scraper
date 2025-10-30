@@ -1,4 +1,4 @@
-import { inspect } from "util";
+import { inspect } from "node:util";
 import { type HTMLElement, parse } from "node-html-parser";
 import { writeFile } from "fs/promises";
 
@@ -8,10 +8,10 @@ const MAX_CONCURRENT = 20;
 /** The starting page for crawling */
 const SEED = "https://www.naves-topical-bible.com";
 
-await parseTopicPage(
-  "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
-);
-// await crawl();
+// await parseTopicPage(
+//   "https://www.naves-topical-bible.com/AFFLICTIONS-AND-ADVERSITIES.html",
+// );
+await crawl();
 
 async function crawl() {
   console.time("scrape");
@@ -44,15 +44,10 @@ async function getTopicURLs(seed: string): Promise<string[]> {
   return topicURLs.flat();
 }
 
-type Subtopic = {
-  title: string;
-  verses: string[];
-  relatedTopics: string[];
-};
-
 type Topic = {
   title: string;
-  subtopics: Subtopic[];
+  subtopics: Topic[];
+  verses: string[];
   relatedTopics: string[];
 };
 
@@ -68,7 +63,6 @@ function parseReferences(refs: string[]): string[] {
   const results: string[] = [];
   let currentBook = "";
 
-  // FIXME: verse markings are also vertagged, even when they're included in the previous passage
   const pattern = /^(?:(?<book>[1-3]?\s?[A-Za-z]+)\s*)?(?<rest>[\d:,\-–]+)$/;
 
   for (const ref of refs) {
@@ -84,52 +78,91 @@ function parseReferences(refs: string[]): string[] {
   return results;
 }
 
-function parseRelatedTopic(s: string): string | undefined {
+function parseRelatedTopic(s: string): string | null {
   const pattern = /^See\s+(?<relatedTopic>.+)$/;
   const m = s.match(pattern);
-  if (!m || !m?.groups) return undefined;
+  if (!m || !m?.groups) return null;
 
   const { relatedTopic } = m.groups;
   return titleCase(relatedTopic ?? ""); // FIXME: weird type bug
 }
 
-function parseSubtopic(header: HTMLElement): Subtopic {
-  const title = titleCase(header.textContent.trim());
-  const ul = header.nextElementSibling;
-  let p = ul;
+function isHeading(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  return /^H[1-6]$/i.test(el.tagName);
+}
+
+function getHeadingLevel(el: HTMLElement): number {
+  const m = el.tagName.match(/^H([1-6])$/i);
+  return m ? Number(m[1]) : 7;
+}
+
+function isSubHeadingOf(parent: HTMLElement, child: HTMLElement): boolean {
+  return getHeadingLevel(child) > getHeadingLevel(parent);
+}
+
+type ParseTopicResult = {
+  topic: Topic;
+  endEl: HTMLElement | null;
+};
+
+function parseTopic(el: HTMLElement): ParseTopicResult {
+  const title = titleCase(el.textContent.trim());
   const verses: string[] = [];
   const relatedTopics: string[] = [];
+  const subtopics: Topic[] = [];
 
-  if (ul?.tagName === "UL") {
-    const refs = ul
+  let cur = el.nextElementSibling;
+
+  // Collect verses immediately following the header
+  if (cur?.tagName === "UL") {
+    const refs = cur
       .querySelectorAll("li > span.versetag")
       .map((el) => el.textContent)
       .flatMap((s) => s.split("; "))
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter((s) => !!s && !Number(s));
 
     verses.push(...parseReferences(refs));
-    p = ul?.nextElementSibling;
+    cur = cur.nextElementSibling;
   }
 
-  while (p?.tagName === "P" && p.textContent.startsWith("See")) {
-    const relatedTopic = parseRelatedTopic(p?.textContent);
+  // Collect related topics
+  while (cur?.tagName === "P" && cur.textContent.trim().startsWith("See")) {
+    const relatedTopic = parseRelatedTopic(cur?.textContent);
     relatedTopic && relatedTopics.push(relatedTopic);
-    p = p.nextElementSibling;
+    cur = cur.nextElementSibling;
   }
 
-  if (title === titleCase("UNCLASSIFIED SCRIPTURES RELATING TO")) {
-    console.log({
-      title,
-      verses,
-      relatedTopics,
-    });
+  // Collect nested subtopics until next sibling/parent topic
+  while (cur) {
+    if (!isHeading(cur)) {
+      cur = cur.nextElementSibling;
+      continue;
+    }
+
+    if (!isSubHeadingOf(el, cur)) break;
+
+    const { topic: subtopic, endEl } = parseTopic(cur);
+    if (
+      subtopic.verses.length ||
+      subtopic.relatedTopics.length ||
+      subtopic.subtopics.length
+    ) {
+      subtopics.push(subtopic);
+    }
+    cur = endEl;
   }
 
-  return {
+  const topic = {
     title,
     verses,
     relatedTopics,
+    subtopics,
+  };
+  return {
+    topic,
+    endEl: cur,
   };
 }
 
@@ -146,25 +179,17 @@ async function parseTopicPage(url: string): Promise<Topic> {
   const document = parse(await res.text());
 
   const header = document.querySelector("h1");
-  const topic = header ? parseSubtopic(header) : null;
+  const parsedRes = header ? parseTopic(header) : null;
 
-  const subtopics: Subtopic[] = document
-    .querySelectorAll("h2, h3")
-    // FIXME: what if h2 represents section of subtopics
-    .map(parseSubtopic)
-    .filter((s) => !!s);
+  if (!parsedRes) {
+    throw Error(`Couldn't find header element on topic page ${url}`);
+  }
 
   console.timeEnd(url);
 
-  console.log({
-    title,
-    subtopics,
-    relatedTopics: topic?.relatedTopics ?? [],
-  });
   return {
+    ...parsedRes.topic,
     title,
-    subtopics,
-    relatedTopics: topic?.relatedTopics ?? [],
   };
 }
 
@@ -178,7 +203,7 @@ async function worker(queue: string[], visited: Set<string>): Promise<Topic[]> {
     try {
       topics.push(await parseTopicPage(url));
     } catch (err) {
-      console.error("Error fetching/parsing", url, err);
+      console.error("Error fetching/parsing", err);
     }
   }
   return topics;

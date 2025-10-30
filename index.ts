@@ -1,28 +1,24 @@
-import { inspect } from "node:util";
+import { writeFile } from "node:fs/promises";
 import { type HTMLElement, parse } from "node-html-parser";
-import { writeFile } from "fs/promises";
 
-/** The maximum concurrent web scrapers */
 const MAX_CONCURRENT = 20;
-
-/** The starting page for crawling */
 const SEED = "https://www.naves-topical-bible.com";
 
-await crawl();
+const topics = await crawl(MAX_CONCURRENT, SEED);
+await writeFile("data.json", JSON.stringify(topics));
 
-async function crawl() {
+async function crawl(num_workers: number, seed_url: string): Promise<Topic[]> {
   console.time("scrape");
-  const queue = await getTopicURLs(SEED);
+  const queue = await getTopicURLs(seed_url);
   const visited = new Set<string>();
-  const workers = Array.from({ length: MAX_CONCURRENT }, () =>
+  const workers = Array.from({ length: num_workers }, () =>
     worker(queue, visited),
   );
   const res = await Promise.all(workers);
-  const topics = res.flat();
-  console.timeEnd("scrape");
-  console.log(inspect(topics, true, 4, true));
+  const topics = res.flat().toSorted((a, b) => a.title.localeCompare(b.title));
 
-  await writeFile("./data.json", JSON.stringify(topics, null, 2), "utf-8");
+  console.timeEnd("scrape");
+  return topics;
 }
 
 async function getTopicURLs(seed: string): Promise<string[]> {

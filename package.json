@@ -19,6 +19,7 @@
     "scrape": "bun run bin/scrape.ts"
   },
   "dependencies": {
+    "drizzle-orm": "^0.44.7",
     "nitro": "^3.0.1-alpha.0",
     "node-html-parser": "^7.0.1",
     "pinia": "^3.0.3",
@@ -26,8 +27,8 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
-    "@types/bun": "latest",
     "@tsconfig/node22": "^22.0.2",
+    "@types/bun": "latest",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^22.18.11",
     "@vitejs/plugin-vue": "^6.0.1",
@@ -36,6 +37,7 @@
     "@vue/eslint-config-typescript": "^14.6.0",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.8.1",
+    "drizzle-kit": "^0.31.6",
     "eslint": "^9.37.0",
     "eslint-plugin-vue": "~10.5.0",
     "jiti": "^2.6.1",

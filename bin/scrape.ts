@@ -4,10 +4,13 @@ import { type HTMLElement, parse } from "node-html-parser";
 const MAX_CONCURRENT = 20;
 const SEED = "https://www.naves-topical-bible.com";
 
-const topics = await crawl(MAX_CONCURRENT, SEED);
+const topics = await scrape();
 await writeFile("data.json", JSON.stringify(topics));
 
-async function crawl(num_workers: number, seed_url: string): Promise<Topic[]> {
+export async function scrape(
+  num_workers = MAX_CONCURRENT,
+  seed_url = SEED,
+): Promise<Topic[]> {
   console.time("scrape");
   const queue = await getTopicURLs(seed_url);
   const visited = new Set<string>();
@@ -15,7 +18,7 @@ async function crawl(num_workers: number, seed_url: string): Promise<Topic[]> {
     worker(queue, visited),
   );
   const res = await Promise.all(workers);
-  const topics = res.flat().toSorted((a, b) => a.title.localeCompare(b.title));
+  const topics = res.flat().sort((a, b) => a.title.localeCompare(b.title));
 
   console.timeEnd("scrape");
   return topics;
@@ -123,7 +126,7 @@ function parseTopic(el: HTMLElement): ParseTopicResult {
   // Collect related topics
   while (cur?.tagName === "P" && cur.textContent.trim().startsWith("See")) {
     const relatedTopic = parseRelatedTopic(cur?.textContent);
-    relatedTopic && relatedTopics.push(relatedTopic);
+    if (relatedTopic) relatedTopics.push(relatedTopic);
     cur = cur.nextElementSibling;
   }
 

@@ -11,13 +11,84 @@ export const topic = sqliteTable("topic", {
   title: text().notNull().unique(),
 });
 
+const books = [
+  "Genesis",
+  "Exodus",
+  "Leviticus",
+  "Numbers",
+  "Deuteronomy",
+  "Joshua",
+  "Judges",
+  "Ruth",
+  "1 Samuel",
+  "2 Samuel",
+  "1 Kings",
+  "2 Kings",
+  "1 Chronicles",
+  "2 Chronicles",
+  "Ezra",
+  "Nehemiah",
+  "Esther",
+  "Job",
+  "Psalms",
+  "Proverbs",
+  "Ecclesiastes",
+  "Song of Solomon",
+  "Isaiah",
+  "Jeremiah",
+  "Lamentations",
+  "Ezekiel",
+  "Daniel",
+  "Hosea",
+  "Joel",
+  "Amos",
+  "Obadiah",
+  "Jonah",
+  "Micah",
+  "Nahum",
+  "Habakkuk",
+  "Zephaniah",
+  "Haggai",
+  "Zechariah",
+  "Malachi",
+  "Matthew",
+  "Mark",
+  "Luke",
+  "John",
+  "Acts",
+  "Romans",
+  "1 Corinthians",
+  "2 Corinthians",
+  "Galatians",
+  "Ephesians",
+  "Philippians",
+  "Colossians",
+  "1 Thessalonians",
+  "2 Thessalonians",
+  "1 Timothy",
+  "2 Timothy",
+  "Titus",
+  "Philemon",
+  "Hebrews",
+  "James",
+  "1 Peter",
+  "2 Peter",
+  "1 John",
+  "2 John",
+  "3 John",
+  "Jude",
+  "Revelation",
+] as const;
+
 export const topicVerse = sqliteTable(
   "topic_verses",
   {
     topicId: integer()
       .notNull()
       .references(() => topic.id),
-    ref: text("verse").notNull(),
+    book: text({ enum: books }),
+
+    ref: text().notNull(),
   },
   (table) => [primaryKey({ columns: [table.topicId, table.ref] })],
 );
@@ -38,14 +109,12 @@ export const relatedTopic = sqliteTable(
 export const topicHierarchy = sqliteTable(
   "topic_hierarchy",
   {
-    parentId: integer()
+    id: integer()
       .notNull()
       .references(() => topic.id),
-    childId: integer()
-      .notNull()
-      .references(() => topic.id),
+    parentId: integer().references(() => topic.id),
   },
-  (table) => [primaryKey({ columns: [table.parentId, table.childId] })],
+  (table) => [primaryKey({ columns: [table.id, table.parentId] })],
 );
 
 export const topicRelationsDef = relations(topic, ({ many }) => ({

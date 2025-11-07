@@ -2,14 +2,16 @@ import { writeFile } from "node:fs/promises";
 import { type HTMLElement, parse } from "node-html-parser";
 
 const MAX_CONCURRENT = 20;
-const SEED = "https://www.naves-topical-bible.com";
+const SEED_URL = "https://www.naves-topical-bible.com";
 
-const topics = await scrape();
-await writeFile("data.json", JSON.stringify(topics));
+if (import.meta.main) {
+  const topics = await scrape();
+  await writeFile("data.json", JSON.stringify(topics));
+}
 
 export async function scrape(
   num_workers = MAX_CONCURRENT,
-  seed_url = SEED,
+  seed_url = SEED_URL,
 ): Promise<Topic[]> {
   console.time("scrape");
   const queue = await getTopicURLs(seed_url);
@@ -24,23 +26,23 @@ export async function scrape(
   return topics;
 }
 
-async function getTopicURLs(seed: string): Promise<string[]> {
+async function getTopicURLs(seed_url: string): Promise<string[]> {
   const alphabet = "abcdefghijklmnopqrstuvwxyz".toUpperCase().split("");
 
   const promises = alphabet.map(async (letter) => {
-    const res = await fetch(`${seed}/Topics-${letter}.html`);
+    const res = await fetch(`${seed_url}/Topics-${letter}.html`);
     return parse(await res.text())
       .querySelectorAll("div#content > li > a")
       .map((el) => el.getAttribute("href"))
       .filter(Boolean)
-      .map((href) => `${seed}/${href}`);
+      .map((href) => `${seed_url}/${href}`);
   });
 
   const topicURLs = await Promise.all(promises);
   return topicURLs.flat();
 }
 
-type Topic = {
+export type Topic = {
   title: string;
   subtopics: Topic[];
   verses: string[];

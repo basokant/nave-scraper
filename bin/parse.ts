@@ -1,7 +1,5 @@
-import { inspect } from "bun";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
-// TODO: make typing less recursive
 export type Topic = {
   title: string;
   subtopics: Topic[];
@@ -11,7 +9,7 @@ export type Topic = {
 
 if (import.meta.main) {
   const topics = await parse();
-  console.log(inspect(topics, { depth: 4 }));
+  await writeFile("data/parsed-nave.json", JSON.stringify(topics));
 }
 
 export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
@@ -51,24 +49,34 @@ function parseDefinition(title: string, def: string): Topic {
   const headingRegex = /^(→|\d\.|\s?)([^<\n]+)(.*)/gm;
   const matches = [...def.matchAll(headingRegex)];
 
-  // TODO: handle mix of → and 1.
   const headings = matches.map((m) => ({
     symbol: m[1], // → or 1. (or 2., 3., etc.)
     title: m[2].trim(), // text before first <
     text: m[3], // text after first < until the end of the line
   }));
 
-  const subtopics = headings
-    .filter((h) => h.title && h.title !== "See")
-    .map((h) => ({
-      ...parseSubtopic(h.title, h.text),
-      symbol: h.symbol,
-    }));
+  const subtopics: Topic[] = [];
+  const relatedTopics: string[] = [];
 
-  const relatedTopics = headings
-    .filter((h) => h.title === "See")
-    .map((h) => parseRelatedTopic(h.text))
-    .filter(Boolean) as string[];
+  let lastSubtopic: Topic | null = null;
+  for (const h of headings) {
+    if (h.title && h.title === "See") {
+      const relatedTopic = parseRelatedTopic(h.text);
+      if (relatedTopic) relatedTopics.push(relatedTopic);
+      continue;
+    }
+
+    const subtopic = parseSubtopic(h.title, h.text);
+    if (lastSubtopic && (h.symbol === "→" || h.symbol === "")) {
+      lastSubtopic?.subtopics.push(subtopic);
+      continue;
+    }
+
+    if (h.symbol !== "→" && h.symbol !== "") {
+      lastSubtopic = subtopic;
+    }
+    subtopics.push(subtopic);
+  }
 
   return {
     title,
@@ -78,6 +86,7 @@ function parseDefinition(title: string, def: string): Topic {
   };
 }
 
+// FIX: not fully parsing related topic (with subtopic)
 function parseRelatedTopic(text: string): string | null {
   const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
   const m = text.match(relatedTopicRegex);

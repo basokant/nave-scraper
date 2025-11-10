@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 
+// TODO: make typing less recursive
 export type Topic = {
   title: string;
   subtopics: Topic[];
@@ -31,7 +32,7 @@ function parseTopic(entry: string): Topic | null {
   const title = entry.slice(0, newlineIndex).trim();
   const body = entry.slice(newlineIndex + 1).trim();
 
-  const defRegex = /<def>\h*(.*)\h*<\/def>/;
+  const defRegex = /<def>\s*(.*)\s*<\/def>/;
   const m = body.match(defRegex);
   const def = m?.[0];
 
@@ -56,7 +57,7 @@ function parseDefinition(title: string, def: string): Topic {
   }));
 
   const subtopics = headings
-    .filter((h) => h.title !== "See")
+    .filter((h) => h.title && h.title !== "See")
     .map((h) => ({
       ...parseSubtopic(h.title, h.text),
       symbol: h.symbol,
@@ -70,7 +71,7 @@ function parseDefinition(title: string, def: string): Topic {
   return {
     title,
     subtopics: subtopics,
-    verses: [], // the parent topic never has verses linked to it directly
+    verses: [], // the parent topic never has verses directly
     relatedTopics: relatedTopics,
   };
 }
@@ -129,7 +130,7 @@ function parseSubtopic(title: string, text: string): Topic {
     .filter(Boolean) as string[];
 
   const subtopics = items
-    .filter((i) => i.title !== "See")
+    .filter((i) => i.title && i.title !== "See")
     .map((i) => parseItem(i.title, i.text));
 
   return {

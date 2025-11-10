@@ -20,7 +20,6 @@ export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
 
   const topics = contents
     .split(topicSeparator)
-    .filter(Boolean)
     .map(parseTopic)
     .filter(Boolean) as Topic[];
 
@@ -65,18 +64,19 @@ function parseDefinition(title: string, def: string): Topic {
 
   const relatedTopics = headings
     .filter((h) => h.title === "See")
-    .map((h) => parseRelatedTopic(h.text));
+    .map((h) => parseRelatedTopic(h.text))
+    .filter(Boolean) as string[];
 
   return {
     title,
     subtopics: subtopics,
-    verses: [],
+    verses: [], // the parent topic never has verses linked to it directly
     relatedTopics: relatedTopics,
   };
 }
 
 function parseRelatedTopic(text: string): string | null {
-  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
+  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/g;
   const m = text.match(relatedTopicRegex);
 
   const relatedTopic = m?.[0];
@@ -89,12 +89,63 @@ function parseRelatedTopic(text: string): string | null {
   return relatedTopic;
 }
 
+function parseVerses(text: string): string[] {
+  const osisRefRegex = /<ref osisRef="([^"]*)">/g;
+  const matches = [...text.matchAll(osisRefRegex)];
+
+  const verses = matches.map((m) => m[0]);
+
+  return verses;
+}
+
 function parseSubtopic(title: string, text: string): Topic {
-  // TODO
+  const listRegex = /(.*)<list>(.*)<\/list>/g;
+  const m = text.match(listRegex);
+
+  if (!m) {
+    return {
+      title,
+      subtopics: [],
+      verses: parseVerses(text),
+      relatedTopics: [],
+    };
+  }
+
+  const versesText = m[0];
+  const verses = parseVerses(versesText);
+
+  const listText = m[1];
+  const itemRegex = /<item>([^<]*)\h(.*?)<\/item>/g;
+  const matches = [...listText.matchAll(itemRegex)];
+
+  const items = matches.map((m) => ({
+    title: m[0].trim(),
+    text: m[1],
+  }));
+
+  const relatedTopics = items
+    .filter((i) => i.title === "See")
+    .map((i) => parseRelatedTopic(i.text))
+    .filter(Boolean) as string[];
+
+  const subtopics = items
+    .filter((i) => i.title !== "See")
+    .map((i) => parseItem(i.title, i.text));
+
+  return {
+    title,
+    subtopics,
+    verses,
+    relatedTopics,
+  };
+}
+
+function parseItem(title: string, text: string): Topic {
+  const verses = parseVerses(text);
   return {
     title,
     subtopics: [],
-    verses: [],
+    verses,
     relatedTopics: [],
   };
 }

@@ -1,3 +1,4 @@
+import { inspect } from "bun";
 import { readFile } from "node:fs/promises";
 
 // TODO: make typing less recursive
@@ -10,7 +11,7 @@ export type Topic = {
 
 if (import.meta.main) {
   const topics = await parse();
-  console.log(topics);
+  console.log(inspect(topics, { depth: 4 }));
 }
 
 export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
@@ -32,11 +33,12 @@ function parseTopic(entry: string): Topic | null {
   const title = entry.slice(0, newlineIndex).trim();
   const body = entry.slice(newlineIndex + 1).trim();
 
-  const defRegex = /<def>\s*(.*)\s*<\/def>/;
+  const defRegex = /<def>\s*([\s\S]*?)<\/def>/;
   const m = body.match(defRegex);
-  const def = m?.[0];
+  const def = m?.[1];
 
   if (!def) {
+    console.error(`couldn't parse def ${title}\n${body}`);
     // TODO: proper error handling here
     return null;
   }
@@ -46,14 +48,14 @@ function parseTopic(entry: string): Topic | null {
 
 function parseDefinition(title: string, def: string): Topic {
   // THIS TOOK ME HOURS!
-  const headingRegex = /^(→|\d\.)?([^<]+)?(.*)/gm;
+  const headingRegex = /^(→|\d\.|\s?)([^<\n]+)(.*)/gm;
   const matches = [...def.matchAll(headingRegex)];
 
   // TODO: handle mix of → and 1.
   const headings = matches.map((m) => ({
-    symbol: m[0], // → or 1. (or 2., 3., etc.)
-    title: m[1].trim(), // text before first <
-    text: m[2], // text after first < until the end of the line
+    symbol: m[1], // → or 1. (or 2., 3., etc.)
+    title: m[2].trim(), // text before first <
+    text: m[3], // text after first < until the end of the line
   }));
 
   const subtopics = headings
@@ -77,13 +79,13 @@ function parseDefinition(title: string, def: string): Topic {
 }
 
 function parseRelatedTopic(text: string): string | null {
-  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/g;
+  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
   const m = text.match(relatedTopicRegex);
 
-  const relatedTopic = m?.[0];
+  const relatedTopic = m?.[1];
 
   if (!relatedTopic) {
-    // TODO: proper error handling
+    console.error(`couldn't parse related topic\n${text}`);
     return null;
   }
 
@@ -94,13 +96,13 @@ function parseVerses(text: string): string[] {
   const osisRefRegex = /<ref osisRef="([^"]*)">/g;
   const matches = [...text.matchAll(osisRefRegex)];
 
-  const verses = matches.map((m) => m[0]);
+  const verses = matches.map((m) => m[1]);
 
   return verses;
 }
 
 function parseSubtopic(title: string, text: string): Topic {
-  const listRegex = /(.*)<list>(.*)<\/list>/g;
+  const listRegex = /(.*?)<list>(.*?)<\/list>/;
   const m = text.match(listRegex);
 
   if (!m) {
@@ -112,7 +114,7 @@ function parseSubtopic(title: string, text: string): Topic {
     };
   }
 
-  const versesText = m[0];
+  const versesText = m[1];
   const verses = parseVerses(versesText);
 
   const listText = m[1];
@@ -120,8 +122,8 @@ function parseSubtopic(title: string, text: string): Topic {
   const matches = [...listText.matchAll(itemRegex)];
 
   const items = matches.map((m) => ({
-    title: m[0].trim(),
-    text: m[1],
+    title: m[1].trim(),
+    text: m[2],
   }));
 
   const relatedTopics = items

@@ -34,7 +34,7 @@ function parseTopic(entry: string): Topic | null {
 
   const defRegex = /<def>\h*(.*)\h*<\/def>/;
   const m = body.match(defRegex);
-  const def = m?.at(0);
+  const def = m?.[0];
 
   if (!def) {
     // TODO: proper error handling here
@@ -75,9 +75,18 @@ function parseDefinition(title: string, def: string): Topic {
   };
 }
 
-function parseRelatedTopic(text: string): string {
-  // TODO
-  return text;
+function parseRelatedTopic(text: string): string | null {
+  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
+  const m = text.match(relatedTopicRegex);
+
+  const relatedTopic = m?.[0];
+
+  if (!relatedTopic) {
+    // TODO: proper error handling
+    return null;
+  }
+
+  return relatedTopic;
 }
 
 function parseSubtopic(title: string, text: string): Topic {

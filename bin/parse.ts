@@ -32,7 +32,7 @@ function parseTopic(entry: string): Topic | null {
   const title = entry.slice(0, newlineIndex).trim();
   const body = entry.slice(newlineIndex + 1).trim();
 
-  const defRegex = /<def>\s*(.*)\s*<\/def>/;
+  const defRegex = /<def>\h*(.*)\h*<\/def>/;
   const m = body.match(defRegex);
   const def = m?.at(0);
 
@@ -45,11 +45,47 @@ function parseTopic(entry: string): Topic | null {
 }
 
 function parseDefinition(title: string, def: string): Topic {
-  // TODO: get all parent subtopic sections
-  // TODO: handle "See" headings
-  const subtopicRegex = /^(→|\d\.)?\h?([^<]+)\h(.*)/gm;
+  // THIS TOOK ME HOURS!
+  const headingRegex = /^(→|\d\.)?([^<]+)?(.*)/gm;
+  const matches = [...def.matchAll(headingRegex)];
+
+  // TODO: handle mix of → and 1.
+  const headings = matches.map((m) => ({
+    symbol: m[0], // → or 1. (or 2., 3., etc.)
+    title: m[1].trim(), // text before first <
+    text: m[2], // text after first < until the end of the line
+  }));
+
+  const subtopics = headings
+    .filter((h) => h.title !== "See")
+    .map((h) => ({
+      ...parseSubtopic(h.title, h.text),
+      symbol: h.symbol,
+    }));
+
+  const relatedTopics = headings
+    .filter((h) => h.title === "See")
+    .map((h) => parseRelatedTopic(h.text));
 
   return {
     title,
+    subtopics: subtopics,
+    verses: [],
+    relatedTopics: relatedTopics,
+  };
+}
+
+function parseRelatedTopic(text: string): string {
+  // TODO
+  return text;
+}
+
+function parseSubtopic(title: string, text: string): Topic {
+  // TODO
+  return {
+    title,
+    subtopics: [],
+    verses: [],
+    relatedTopics: [],
   };
 }

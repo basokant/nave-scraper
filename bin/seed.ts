@@ -1,5 +1,5 @@
-import { scrape, type Topic } from "./scrape.ts";
 import { db as database } from "../src/db/index.ts";
+import { parse, type Topic } from "../bin/parse.ts";
 import { topic, topicHierarchy, topicVerse } from "../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 
@@ -27,8 +27,8 @@ function flattenTopics(
 }
 
 async function seed(db = database, topics?: Topic[]) {
-  const scrapedData = topics ?? (await scrape());
-  const data = flattenTopics(scrapedData);
+  const parsedData = topics ?? (await parse());
+  const data = flattenTopics(parsedData);
 
   await db.transaction(async (tx) => {
     for (const t of data) {

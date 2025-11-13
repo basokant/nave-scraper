@@ -9,7 +9,7 @@ export type Topic = {
 
 if (import.meta.main) {
   const topics = await parse();
-  await writeFile("data/parsed-nave.json", JSON.stringify(topics));
+  await writeFile("data/parsed-nave.json", JSON.stringify(topics, null, 2));
 }
 
 export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
@@ -26,7 +26,7 @@ export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
   return topics;
 }
 
-function parseTopic(entry: string): Topic | null {
+export function parseTopic(entry: string): Topic | null {
   const newlineIndex = entry.indexOf("\n");
   const title = entry.slice(0, newlineIndex).trim();
   const body = entry.slice(newlineIndex + 1).trim();
@@ -44,7 +44,7 @@ function parseTopic(entry: string): Topic | null {
   return parseDefinition(title, def);
 }
 
-function parseDefinition(title: string, def: string): Topic {
+export function parseDefinition(title: string, def: string): Topic {
   // THIS TOOK ME HOURS!
   const headingRegex = /^(→|\d\.|\s?)([^<\n]+)(.*)/gm;
   const matches = [...def.matchAll(headingRegex)];
@@ -87,7 +87,7 @@ function parseDefinition(title: string, def: string): Topic {
 }
 
 // FIX: not fully parsing related topic (with subtopic)
-function parseRelatedTopic(text: string): string | null {
+export function parseRelatedTopic(text: string): string | null {
   const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
   const m = text.match(relatedTopicRegex);
 
@@ -101,7 +101,8 @@ function parseRelatedTopic(text: string): string | null {
   return relatedTopic;
 }
 
-function parseVerses(text: string): string[] {
+// TODO: parse book and passage separately
+export function parseVerses(text: string): string[] {
   const osisRefRegex = /<ref osisRef="([^"]*)">/g;
   const matches = [...text.matchAll(osisRefRegex)];
 
@@ -110,7 +111,7 @@ function parseVerses(text: string): string[] {
   return verses;
 }
 
-function parseSubtopic(title: string, text: string): Topic {
+export function parseSubtopic(title: string, text: string): Topic {
   const listRegex = /(.*?)<list>(.*?)<\/list>/;
   const m = text.match(listRegex);
 

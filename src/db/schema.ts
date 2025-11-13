@@ -11,7 +11,7 @@ export const topic = sqliteTable("topic", {
   title: text().notNull().unique(),
 });
 
-const books = [
+export const books = [
   "Genesis",
   "Exodus",
   "Leviticus",
@@ -79,6 +79,8 @@ const books = [
   "Jude",
   "Revelation",
 ] as const;
+
+export type Book = (typeof books)[number];
 
 export const topicVerse = sqliteTable(
   "topic_verses",

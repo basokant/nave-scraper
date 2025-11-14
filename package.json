@@ -16,7 +16,8 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix --cache",
     "format": "prettier --write src/",
-    "scrape": "bun run bin/scrape.ts"
+    "scrape": "bun run bin/scrape.ts",
+    "parse": "bun run bin/parse.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",

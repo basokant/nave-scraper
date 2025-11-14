@@ -112,7 +112,7 @@ export function parseVerses(text: string): Verse[] {
   const verses = text
     .matchAll(osisRefRegex)
     .map((m) => m.groups?.verse ?? "")
-    .map(parseVerse);
+    .map((text) => parseVerse(text));
 
   return verses.toArray();
 }
@@ -186,12 +186,12 @@ const osisBookMap: Record<string, Book> = {
   Rev: "Revelation",
 };
 
-export function parseVerse(text: string): Verse {
+export function parseVerse(text: string, bookMap = osisBookMap): Verse {
   const refRegex =
     /(?<book>\w+)\.(?<ref1>[^-]+)-?(?:\k<book>.)?(?<ref2>[^-]+)?/;
   const groups = text.match(refRegex)?.groups;
 
-  const book = osisBookMap[groups?.book ?? ""];
+  const book = bookMap[groups?.book ?? ""];
   const ref1 = groups?.ref1?.replace(".", ":");
   const ref2 = groups?.ref2?.replace(".", ":");
 

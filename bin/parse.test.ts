@@ -6,7 +6,7 @@ import {
   parseVerses,
   type Topic,
   type Verse,
-} from "./parse.ts";
+} from "./parse";
 
 describe("parse verse", () => {
   test("single verse reference", () => {

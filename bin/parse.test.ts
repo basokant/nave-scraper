@@ -1,5 +1,12 @@
 import { describe, test, expect } from "vitest";
-import { parseVerse, parseVerses, type Verse } from "./parse.ts";
+import {
+  parse,
+  parseSubtopic,
+  parseVerse,
+  parseVerses,
+  type Topic,
+  type Verse,
+} from "./parse.ts";
 
 describe("parse verse", () => {
   test("single verse reference", () => {
@@ -79,5 +86,41 @@ describe("parse verses", () => {
       },
     ];
     expect(got).toEqual(want);
+  });
+});
+
+describe("parse subtopic", () => {
+  test("with list", () => {
+    const text =
+      '<list> <item>To Adam <ref osisRef="Gen.3.8-Gen.3.21">Ge 3:8-21</ref></item> <item>To Abraham <ref osisRef="Gen.18.2-Gen.18.33">Ge 18:2-33</ref></item> </list>';
+
+    const got = parseSubtopic("Appearances of", text);
+    const want: Topic = {
+      title: "Appearances of",
+      verses: [],
+      subtopics: [
+        {
+          title: "To Adam",
+          verses: [{ book: "Genesis", ref: "3:8-3:21" }],
+          subtopics: [],
+          relatedTopics: [],
+        },
+        {
+          title: "To Abraham",
+          verses: [{ book: "Genesis", ref: "18:2-18:33" }],
+          subtopics: [],
+          relatedTopics: [],
+        },
+      ],
+      relatedTopics: [],
+    };
+
+    expect(got).toEqual(want);
+  });
+});
+
+describe("parse topics", () => {
+  test("does not error", () => {
+    expect(parse).not.toThrowError();
   });
 });

@@ -37,9 +37,8 @@ export function parseTopic(entry: string): Topic | null {
   const title = entry.slice(0, newlineIndex).trim();
   const body = entry.slice(newlineIndex + 1).trim();
 
-  const defRegex = /<def>\s*([\s\S]*?)<\/def>/;
-  const m = body.match(defRegex);
-  const def = m?.[1];
+  const defRegex = /<def>\s*(?<def>[\s\S]*?)<\/def>/;
+  const def = body.match(defRegex)?.groups?.def;
 
   if (!def) {
     console.warn(`Could not parse def ${title}\n${body}`);
@@ -51,14 +50,16 @@ export function parseTopic(entry: string): Topic | null {
 
 export function parseDefinition(title: string, def: string): Topic {
   // THIS TOOK ME HOURS!
-  const headingRegex = /^(→|\d\.|\s?)([^<\n]+)(.*)/gm;
-  const matches = [...def.matchAll(headingRegex)];
+  const headingRegex = /^(?<symbol>→|\d\.|\s?)(?<title>[^<\n]+)(?<text>.*)/gm;
+  const matches = def.matchAll(headingRegex);
 
-  const headings = matches.map((m) => ({
-    symbol: m[1], // → or 1. (or 2., 3., etc.)
-    title: m[2].trim(), // text before first <
-    text: m[3], // text after first < until the end of the line
-  }));
+  const headings = matches
+    .map((m) => m?.groups)
+    .map((g) => ({
+      symbol: g?.symbol ?? "", // → or 1. (or 2., 3., etc.)
+      title: g?.title ?? "", // text before first <
+      text: g?.text ?? "", // text after first < until the end of the line
+    }));
 
   const subtopics: Topic[] = [];
   const relatedTopics: string[] = [];
@@ -93,10 +94,8 @@ export function parseDefinition(title: string, def: string): Topic {
 
 // FIX: not fully parsing related topic (with subtopic)
 export function parseRelatedTopic(text: string): string | null {
-  const relatedTopicRegex = /<ref.*>([^<]+)<\/ref>/;
-  const m = text.match(relatedTopicRegex);
-
-  const relatedTopic = m?.[1];
+  const relatedTopicRegex = /<ref.*>(?<relatedTopic>[^<]+)<\/ref>/;
+  const relatedTopic = text.match(relatedTopicRegex)?.groups?.relatedTopic;
 
   if (!relatedTopic) {
     console.warn(`Could not parse related topic\n${text}`);
@@ -108,12 +107,14 @@ export function parseRelatedTopic(text: string): string | null {
 
 // TODO: parse book and passage separately
 export function parseVerses(text: string): Verse[] {
-  const osisRefRegex = /<ref osisRef="([^"]*)">/g;
-  const matches = [...text.matchAll(osisRefRegex)];
+  const osisRefRegex = /<ref osisRef="(?<verse>[^"]*)">/g;
 
-  const verses = matches.map((m) => m[1]).map(parseVerse);
+  const verses = text
+    .matchAll(osisRefRegex)
+    .map((m) => m.groups?.verse ?? "")
+    .map(parseVerse);
 
-  return verses;
+  return verses.toArray();
 }
 
 const osisBookMap: Record<string, Book> = {
@@ -188,7 +189,7 @@ const osisBookMap: Record<string, Book> = {
 export function parseVerse(text: string): Verse {
   const refRegex =
     /(?<book>\w+)\.(?<ref1>[^-]+)-?(?:\k<book>.)?(?<ref2>[^-]+)?/;
-  const groups = refRegex.exec(text)?.groups;
+  const groups = text.match(refRegex)?.groups;
 
   const book = osisBookMap[groups?.book ?? ""];
   const ref1 = groups?.ref1?.replace(".", ":");
@@ -207,7 +208,7 @@ export function parseVerse(text: string): Verse {
 }
 
 export function parseSubtopic(title: string, text: string): Topic {
-  const listRegex = /(.*?)<list>(.*?)<\/list>/;
+  const listRegex = /(?<versesText>.*?)<list>(?<listText>.*?)<\/list>/;
   const m = text.match(listRegex);
 
   if (!m) {
@@ -219,26 +220,32 @@ export function parseSubtopic(title: string, text: string): Topic {
     };
   }
 
-  const versesText = m[1];
+  const versesText = m.groups?.versesText ?? "";
   const verses = parseVerses(versesText);
 
-  const listText = m[1];
-  const itemRegex = /<item>([^<]*)\h(.*?)<\/item>/g;
-  const matches = [...listText.matchAll(itemRegex)];
+  const listText = m.groups?.listText ?? "";
 
-  const items = matches.map((m) => ({
-    title: m[1].trim(),
-    text: m[2],
-  }));
+  const itemRegex = /<item>(?<title>[^<]*)(?<text>.*?)<\/item>/g;
+  const matches = listText.matchAll(itemRegex);
+
+  const items = matches
+    .map((m) => ({
+      title: m.groups?.title.trim() ?? "",
+      text: m.groups?.text.trim() ?? "",
+    }))
+    .toArray();
 
   const relatedTopics = items
-    .filter((i) => i.title === "See")
+    .values()
+    .filter((i) => !!i.title && i.title === "See")
     .map((i) => parseRelatedTopic(i.text))
-    .filter(Boolean) as string[];
+    .toArray() as string[];
 
   const subtopics = items
-    .filter((i) => i.title && i.title !== "See")
-    .map((i) => parseItem(i.title, i.text));
+    .values()
+    .filter((i) => !!i.title && i.title !== "See")
+    .map((i) => parseItem(i.title, i.text))
+    .toArray();
 
   return {
     title,

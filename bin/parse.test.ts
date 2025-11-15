@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import {
   parse,
   parseSubtopic,
+  parseTopic,
   parseVerse,
   parseVerses,
   type Topic,
@@ -119,8 +120,26 @@ describe("parse subtopic", () => {
   });
 });
 
+describe("parse topic", () => {
+  test("only related topic", () => {
+    const text = `ABARIM
+  <entryFree n="ABARIM"> <def> 
+  → See <ref target="Nave:NEBO">NEBO</ref></def> </entryFree>`;
+
+    const got = parseTopic(text);
+    const want: Topic = {
+      title: "ABARIM",
+      verses: [],
+      subtopics: [],
+      relatedTopics: ["NEBO"],
+    };
+
+    expect(got).toEqual(want);
+  });
+});
+
 describe("parse topics", () => {
-  test("does not error", () => {
-    expect(parse).not.toThrowError();
+  test("does not error", async () => {
+    await expect(parse()).resolves.not.toThrowError();
   });
 });

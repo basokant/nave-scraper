@@ -1,122 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { Book } from "../src/db/schema";
 
-export type Verse = {
-  book: Book;
-  ref: string;
-};
-
-export type Topic = {
-  title: string;
-  subtopics: Topic[];
-  verses: Verse[];
-  relatedTopics: string[];
-};
-
-if (import.meta.main) {
-  const topics = await parse();
-  await writeFile("data/parsed-nave.json", JSON.stringify(topics, null, 2));
-}
-
-export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
-  const file = await readFile(path);
-  const contents = file.toString().replaceAll("<lb/>", "\n");
-
-  const topicSeparator = "$$$";
-
-  const topics = contents
-    .split(topicSeparator)
-    .map(parseTopic)
-    .filter(Boolean) as Topic[];
-
-  return topics;
-}
-
-export function parseTopic(entry: string): Topic | null {
-  const newlineIndex = entry.indexOf("\n");
-  const title = entry.slice(0, newlineIndex).trim();
-  const body = entry.slice(newlineIndex + 1).trim();
-
-  const defRegex = /<def>\s*(?<def>[\s\S]*?)<\/def>/;
-  const def = body.match(defRegex)?.groups?.def;
-
-  if (!def) {
-    console.warn(`Could not parse def ${title}\n${body}`);
-    return null;
-  }
-
-  return parseDefinition(title, def);
-}
-
-export function parseDefinition(title: string, def: string): Topic {
-  // THIS TOOK ME HOURS!
-  const headingRegex = /^(?<symbol>→|\d\.|\s?)(?<title>[^<\n]+)(?<text>.*)/gm;
-  const matches = def.matchAll(headingRegex);
-
-  const headings = matches
-    .map((m) => m?.groups)
-    .map((g) => ({
-      symbol: g?.symbol ?? "", // → or 1. (or 2., 3., etc.)
-      title: g?.title ?? "", // text before first <
-      text: g?.text ?? "", // text after first < until the end of the line
-    }));
-
-  const subtopics: Topic[] = [];
-  const relatedTopics: string[] = [];
-
-  let lastSubtopic: Topic | null = null;
-  for (const h of headings) {
-    if (h.title && h.title === "See") {
-      const relatedTopic = parseRelatedTopic(h.text);
-      if (relatedTopic) relatedTopics.push(relatedTopic);
-      continue;
-    }
-
-    const subtopic = parseSubtopic(h.title, h.text);
-    if (lastSubtopic && (h.symbol === "→" || h.symbol === "")) {
-      lastSubtopic?.subtopics.push(subtopic);
-      continue;
-    }
-
-    if (h.symbol !== "→" && h.symbol !== "") {
-      lastSubtopic = subtopic;
-    }
-    subtopics.push(subtopic);
-  }
-
-  return {
-    title,
-    subtopics: subtopics,
-    verses: [], // the parent topic never has verses directly
-    relatedTopics: relatedTopics,
-  };
-}
-
-// FIX: not fully parsing related topic (with subtopic)
-export function parseRelatedTopic(text: string): string | null {
-  const relatedTopicRegex = /<ref.*>(?<relatedTopic>[^<]+)<\/ref>/;
-  const relatedTopic = text.match(relatedTopicRegex)?.groups?.relatedTopic;
-
-  if (!relatedTopic) {
-    console.warn(`Could not parse related topic\n${text}`);
-    return null;
-  }
-
-  return relatedTopic;
-}
-
-// TODO: parse book and passage separately
-export function parseVerses(text: string): Verse[] {
-  const osisRefRegex = /<ref osisRef="(?<verse>[^"]*)">/g;
-
-  const verses = text
-    .matchAll(osisRefRegex)
-    .map((m) => m.groups?.verse ?? "")
-    .map((text) => parseVerse(text));
-
-  return verses.toArray();
-}
-
 const osisBookMap: Record<string, Book> = {
   Gen: "Genesis",
   Exod: "Exodus",
@@ -184,7 +68,140 @@ const osisBookMap: Record<string, Book> = {
   "3John": "3 John",
   Jude: "Jude",
   Rev: "Revelation",
+  // Apocrypha
+  PrAzar: "The Prayer of Azariah",
+  Wis: "Wisdom of Solomon",
 };
+
+export type Verse = {
+  book: Book;
+  ref: string;
+};
+
+export type Topic = {
+  title: string;
+  subtopics: Topic[];
+  verses: Verse[];
+  relatedTopics: string[];
+};
+
+if (import.meta.main) {
+  const topics = await parse();
+  await writeFile("data/parsed-nave.json", JSON.stringify(topics, null, 2));
+}
+
+export async function parse(path = "data/nave.txt"): Promise<Topic[]> {
+  const file = await readFile(path);
+  const contents = file.toString().replaceAll("<lb/>", "\n");
+
+  const topicSeparator = "$$$";
+
+  const topics = contents
+    .split(topicSeparator)
+    .values()
+    .filter(Boolean)
+    .map(parseTopic)
+    .toArray();
+
+  return topics;
+}
+
+export function parseTopic(entry: string): Topic {
+  const newlineIndex = entry.indexOf("\n");
+  const title = entry.slice(0, newlineIndex).trim();
+  const body = entry.slice(newlineIndex + 1).trim();
+
+  const defRegex = /<def>\s*(?<def>[\s\S]*?)<\/def>/;
+  const def = body.match(defRegex)?.groups?.def;
+
+  if (!def) {
+    throw Error(`Could not parse def ${title}: ${body}`);
+  }
+
+  return parseDefinition(title, def);
+}
+
+export function parseDefinition(title: string, def: string): Topic {
+  // THIS TOOK ME HOURS!
+  const headingRegex = /^(?<symbol>→|\d\.|\s?)(?<title>[^<\n]+)(?<text>.*)/gm;
+  const matches = def.matchAll(headingRegex);
+
+  const headings = matches
+    .map((m) => m?.groups)
+    .map((g) => ({
+      symbol: g?.symbol.trim() ?? "", // → or 1. (or 2., 3., etc.)
+      title: g?.title.trim() ?? "", // text before first <
+      text: g?.text.trim() ?? "", // text after first < until the end of the line
+    }));
+
+  const subtopics: Topic[] = [];
+  const relatedTopics: string[] = [];
+
+  let lastSubtopic: Topic | null = null;
+  for (const h of headings) {
+    if (h.title != "" && h.title.includes("See")) {
+      // FIX: remove try catch
+      try {
+        const relatedTopic = parseRelatedTopic(h.title.slice(3) + h.text);
+        relatedTopics.push(relatedTopic);
+      } catch {
+        console.log(h);
+      }
+      continue;
+    }
+
+    const subtopic = parseSubtopic(h.title, h.text);
+    if (lastSubtopic && (h.symbol === "→" || h.symbol === "")) {
+      lastSubtopic?.subtopics.push(subtopic);
+      continue;
+    }
+
+    if (h.symbol !== "→" && h.symbol !== "") {
+      lastSubtopic = subtopic;
+    }
+    subtopics.push(subtopic);
+  }
+
+  return {
+    title,
+    subtopics: subtopics,
+    verses: [], // the parent topic never has verses directly
+    relatedTopics: relatedTopics,
+  };
+}
+
+// FIX: not fully parsing related topic (with subtopic)
+export function parseRelatedTopic(text: string): string {
+  const relatedTopicLinkRegex = /<ref.*>(?<relatedTopic>[^<]+)<\/ref>/;
+  const relatedTopicTextRegex = /(?<relatedTopic>.*)(?:,(?:above|below))?/;
+
+  const relatedTopicLink = text.match(relatedTopicLinkRegex)?.groups
+    ?.relatedTopic;
+
+  if (relatedTopicLink) {
+    return relatedTopicLink;
+  }
+
+  const relatedTopicText = text.match(relatedTopicTextRegex)?.groups
+    ?.relatedTopic;
+
+  if (relatedTopicText) {
+    return relatedTopicText;
+  }
+
+  throw Error(`Could not parse related topic: '${text}'`);
+}
+
+export function parseVerses(text: string): Verse[] {
+  const osisRefRegex = /<ref osisRef="(?<verse>[^"]*)">/g;
+
+  const verses = text
+    .matchAll(osisRefRegex)
+    .map((m) => m.groups?.verse ?? "")
+    .map((text) => parseVerse(text));
+
+  return verses.toArray();
+}
 
 export function parseVerse(text: string, bookMap = osisBookMap): Verse {
   const refRegex =
@@ -196,7 +213,7 @@ export function parseVerse(text: string, bookMap = osisBookMap): Verse {
   const ref2 = groups?.ref2?.replace(".", ":");
 
   if (!book || !ref1) {
-    throw Error(`Could not parse verse ref.\n${text}`);
+    throw Error(`Could not parse verse ref: ${text}`);
   }
 
   const ref = !!ref2 ? `${ref1}-${ref2}` : ref1;
@@ -233,17 +250,18 @@ export function parseSubtopic(title: string, text: string): Topic {
       title: m.groups?.title.trim() ?? "",
       text: m.groups?.text.trim() ?? "",
     }))
+    .filter(Boolean)
     .toArray();
 
   const relatedTopics = items
     .values()
-    .filter((i) => !!i.title && i.title === "See")
-    .map((i) => parseRelatedTopic(i.text))
-    .toArray() as string[];
+    .filter((i) => i.title.includes("See"))
+    .map((i) => parseRelatedTopic(i.title.slice(3) + i.text))
+    .toArray();
 
   const subtopics = items
     .values()
-    .filter((i) => !!i.title && i.title !== "See")
+    .filter((i) => !i.title.includes("See"))
     .map((i) => parseItem(i.title, i.text))
     .toArray();
 

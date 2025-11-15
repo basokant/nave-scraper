@@ -78,6 +78,25 @@ export const books = [
   "3 John",
   "Jude",
   "Revelation",
+  // Apocypha
+  "Additions to the Book of Esther",
+  "Baruch",
+  "Bel and the Dragon",
+  "Ben Sira",
+  "1 Esdras",
+  "2 Esdras",
+  "Judith",
+  "Letter of Jeremiah",
+  "1 Maccabees",
+  "2 Maccabees",
+  "3 Maccabees",
+  "4 Maccabees",
+  "The Prayer of Azariah",
+  "Prayer of Manasseh",
+  "Psalm 151",
+  "Susanna",
+  "Tobit",
+  "Wisdom of Solomon",
 ] as const;
 
 export type Book = (typeof books)[number];
